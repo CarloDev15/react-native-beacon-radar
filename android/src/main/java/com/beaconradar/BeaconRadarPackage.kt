@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class BeaconRadarPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(BeaconRadarModule(reactContext))
+        return listOf<NativeModule>(BeaconRadarModule(reactContext))
     }
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {

@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from "react-native"
+import { TurboModuleRegistry } from 'react-native';
 
 const LINKING_ERROR =
   `The package 'react-native-beacon-radar' doesn't seem to be linked. Make sure: \n\n` +
@@ -65,3 +66,5 @@ export function startRadar(config: any) {
 export function initializeBluetoothManager() {
   return BeaconRadar.initializeBluetoothManager()
 }
+
+export default TurboModuleRegistry.getEnforcing('BeaconRadar');
