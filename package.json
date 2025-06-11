@@ -1,6 +1,11 @@
 {
   "name": "react-native-beacon-radar",
   "version": "0.3.2",
+  "codegenConfig": {
+    "name": "BeaconRadar",
+    "type": "modules",
+    "jsSrcsDir": "android/src/specs"
+  },
   "description": "Module to scan for iBeacons on iOS and Android, within React Native and Expo managed projects.",
   "main": "app.plugin.js",
   "module": "lib/module/index",
