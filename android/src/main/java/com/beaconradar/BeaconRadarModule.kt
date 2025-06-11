@@ -263,8 +263,8 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
                 }
 
                 // Send notification for the nearest beacon if app is in background
-                val isInForeground = reactApplicationContext.currentActivity?.hasWindowFocus() == true
-                if (!isInForeground && nearestBeacon != null) {
+                // val isInForeground = reactApplicationContext.currentActivity?.hasWindowFocus() == true
+                if (nearestBeacon != null) {
                     Log.d(TAG, "App in background, sending notification for nearest beacon")
                     sendBeaconNotification(nearestBeacon)
                 }
