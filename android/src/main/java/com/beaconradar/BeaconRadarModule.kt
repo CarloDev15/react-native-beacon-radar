@@ -49,7 +49,7 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
         private const val FOREGROUND_NOTIFICATION_ID = 456
         private const val PREFS_NAME = "BeaconRadarPrefs"
         private const val BACKGROUND_MODE_KEY = "backgroundModeEnabled"
-        private var MAX_DISTANCE = 4.0
+        private var MAX_DISTANCE = 10.0
         @JvmStatic
         var instance: BeaconRadarModule? = null
 
@@ -66,8 +66,7 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
     }
 
     private val beaconManager: BeaconManager = BeaconManager.getInstanceForApplication(reactApplicationContext)
-    private var region: Region = Region("all-beacons", Identifier.parse("FDA50693-A4E2-4FB1-AFCF-C6EB07647825"), null, null)
-
+    private var region: Region = Region("all-beacons", null, null, null)
     init {
         instance = this
         setupBeaconManager()
@@ -101,12 +100,14 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
 
     private fun setupBeaconManager() {
         BeaconManager.setDebug(true)
-        val layout = "m:0-3=4c000215,i:4-19,i:20-21,i:22-23,p:24-24"
-        if (beaconManager.beaconParsers.none { it.layout == layout }) {
-            val iBeaconParser = BeaconParser().setBeaconLayout(layout)
-            beaconManager.beaconParsers.add(iBeaconParser)
+        val iBeaconLayout1 = "m:0-3=4c000215,i:4-19,i:20-21,i:22-23,p:24-24"
+        val iBeaconLayout2 = "m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"
+        if (beaconManager.beaconParsers.none { it.layout == iBeaconLayout1 }) {
+            beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout(iBeaconLayout1))
         }
-
+        if (beaconManager.beaconParsers.none { it.layout == iBeaconLayout2 }) {
+            beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout(iBeaconLayout2))
+        }
 
         beaconManager.foregroundScanPeriod = 1100L
         beaconManager.foregroundBetweenScanPeriod = 0L
@@ -314,11 +315,12 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
     // Implementa qui i metodi astratti definiti nello Spec
     override fun startScanning(uuid: String, options: ReadableMap, promise: Promise) {
         Log.d(TAG, "startScanning chiamato con uuid=$uuid, options=$options")
-        val major = options.getInt("major")
-        val minor = options.getInt("minor")
         region = Region("all-beacons", Identifier.parse(uuid), null, null)
-        Log.d(TAG, "setupBeaconScanning chiamato")
-        setupBeaconScanning()
+        beaconManager.stopMonitoring(region)
+        beaconManager.stopRangingBeacons(region)
+        beaconManager.addMonitorNotifier(this)
+        beaconManager.addRangeNotifier(this)
+        setupForegroundService()
         beaconManager.startMonitoring(region)
         beaconManager.startRangingBeacons(region)
         promise.resolve(null)
