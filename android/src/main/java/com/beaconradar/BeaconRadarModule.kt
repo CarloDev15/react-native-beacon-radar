@@ -35,7 +35,7 @@ import android.provider.Settings
 class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRadarSpec(reactContext), MonitorNotifier, RangeNotifier {
 
     companion object {
-        const val TAG = "MY_BEACON_DEBUG"
+        const val TAG = "BeaconReference"
         const val NAME = "BeaconRadar"
         const val UPDATE = "updateBeacons"
         const val BEACONS = "beacons"
