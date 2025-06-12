@@ -125,7 +125,7 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
             beaconManager.addRangeNotifier(moduleInstance)
         }
 
-        setupForegroundService()
+        // setupForegroundService()
 
         // Only start monitoring here - ranging will be started when a region is entered
         Log.d(TAG, "Starting monitoring for region: $region")
@@ -266,7 +266,7 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
                 // val isInForeground = reactApplicationContext.currentActivity?.hasWindowFocus() == true
                 if (nearestBeacon != null) {
                     Log.d(TAG, "App in background, sending notification for nearest beacon")
-                    sendBeaconNotification(nearestBeacon)
+                    // sendBeaconNotification(nearestBeacon)
                 }
 
                 // Emit event to JavaScript
@@ -312,7 +312,7 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
 
 
 
-    // Implementa qui i metodi astratti definiti nello Spec
+    // Spec method
     override fun startScanning(uuid: String, options: ReadableMap, promise: Promise) {
         Log.d(TAG, "startScanning chiamato con uuid=$uuid, options=$options")
         region = Region("all-beacons", Identifier.parse(uuid), null, null)
@@ -320,7 +320,7 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
         beaconManager.stopRangingBeacons(region)
         beaconManager.addMonitorNotifier(this)
         beaconManager.addRangeNotifier(this)
-        setupForegroundService()
+        // setupForegroundService()
         beaconManager.startMonitoring(region)
         beaconManager.startRangingBeacons(region)
         promise.resolve(null)
@@ -340,13 +340,8 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
         }
     }
 
-    // Rimuovi eventuali override di:
-    // - on(event: String, callback: Any)
-    // - onRequestPermissionsResult(...)
-
     private fun getBluetoothState(): String {
         return "unknown"
-
     }
 
     @ReactMethod
