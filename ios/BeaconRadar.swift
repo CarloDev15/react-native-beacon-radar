@@ -3,236 +3,256 @@ import CoreBluetooth
 import React
 
 @objc(BeaconRadar)
-class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate, CBCentralManagerDelegate {
-  
-  static func moduleName() -> String {
-    return "BeaconRadar"
-  }
-
+class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
+    
+    static func moduleName() -> String {
+        return "BeaconRadar"
+    }
+    
     private var locationManager: CLLocationManager!
     private var beaconRegion: CLBeaconRegion!
     public var bridge: RCTBridge!
-    private var centralManager: CBCentralManager!
-
+    
+    // React Native bridge setup
+    @objc static func requiresMainQueueSetup() -> Bool {
+        return true
+    }
+    
+    // MARK: - Public Methods
+    
     @objc func startScanning(_ uuid: String, config: NSDictionary) {
-      if #available(iOS 13.0, *) {
-          DispatchQueue.main.async {
-            self.locationManager = CLLocationManager()
-            self.locationManager.delegate = self
+        print("[BeaconRadar] Starting scanning for UUID: \(uuid)")
+        
+        DispatchQueue.main.async {
+            // Initialize location manager
+            if self.locationManager == nil {
+                self.locationManager = CLLocationManager()
+                self.locationManager.delegate = self
+                self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
+            }
             
+            // Configure background scanning if needed
             if let useBackgroundScanning = config["useBackgroundScanning"] as? Bool, useBackgroundScanning {
                 self.locationManager.allowsBackgroundLocationUpdates = true
                 self.locationManager.pausesLocationUpdatesAutomatically = false
+                print("[BeaconRadar] Background scanning enabled")
             }
             
-            let uuid = UUID(uuidString: uuid)!
+            // Create beacon region
+            guard let proximityUUID = UUID(uuidString: uuid) else {
+                print("[BeaconRadar] Error: Invalid UUID format")
+                return
+            }
             
-            if let major = config["major"] as? String, let minor = config["minor"] as? String {
+            if let majorStr = config["major"] as? String,
+               let minorStr = config["minor"] as? String,
+               let major = CLBeaconMajorValue(majorStr),
+               let minor = CLBeaconMinorValue(minorStr) {
+                
                 self.beaconRegion = CLBeaconRegion(
-                    proximityUUID: uuid,
-                    major: CLBeaconMajorValue(major) ?? 0,
-                    minor: CLBeaconMinorValue(minor) ?? 0,
+                    uuid: proximityUUID,
+                    major: major,
+                    minor: minor,
                     identifier: "RNIbeaconScannerRegion"
                 )
+                print("[BeaconRadar] Created region with UUID: \(uuid), major: \(major), minor: \(minor)")
             } else {
-                self.beaconRegion = CLBeaconRegion(proximityUUID: uuid, identifier: "RNIbeaconScannerRegion")
+                self.beaconRegion = CLBeaconRegion(
+                    uuid: proximityUUID,
+                    identifier: "RNIbeaconScannerRegion"
+                )
+                print("[BeaconRadar] Created region with UUID: \(uuid) (no major/minor)")
             }
             
+            // Configure region notifications
             self.beaconRegion.notifyOnEntry = true
             self.beaconRegion.notifyOnExit = true
             self.beaconRegion.notifyEntryStateOnDisplay = true
             
-            let authStatus = CLLocationManager.authorizationStatus()
-            if authStatus == .notDetermined {
+            // Check and request authorization
+            let status = CLLocationManager.authorizationStatus()
+            print("[BeaconRadar] Current authorization status: \(self.stringFromAuthorizationStatus(status))")
+            
+            if status == .notDetermined {
+                print("[BeaconRadar] Requesting always authorization")
                 self.locationManager.requestAlwaysAuthorization()
-            } else if authStatus == .authorizedAlways || authStatus == .authorizedWhenInUse {
+            } else if status == .authorizedAlways || status == .authorizedWhenInUse {
+                print("[BeaconRadar] Already authorized, starting monitoring")
                 self.startMonitoringAndRanging()
+            } else {
+                print("[BeaconRadar] Location services not authorized")
+                self.sendEvent(name: "onAuthorizationFailure", body: ["status": self.stringFromAuthorizationStatus(status)])
             }
         }
-      } else {
-        //TODO Handling older versions
-      }
-  }
+    }
     
     @objc func stopScanning() {
-        if let beaconRegion = self.beaconRegion {
-            self.locationManager.stopMonitoring(for: beaconRegion)
-            self.locationManager.stopRangingBeacons(in: beaconRegion)
-            self.beaconRegion = nil
-            self.locationManager = nil
-        }
+        print("[BeaconRadar] Stopping scanning")
+        guard let beaconRegion = self.beaconRegion else { return }
+        
+        self.locationManager.stopMonitoring(for: beaconRegion)
+        self.locationManager.stopRangingBeacons(in: beaconRegion)
+        self.locationManager.allowsBackgroundLocationUpdates = false
     }
     
-    @objc func initializeBluetoothManager() {
-        centralManager = CBCentralManager(delegate: self, queue: nil, options: [CBCentralManagerOptionShowPowerAlertKey: false])
-    }
-    
-    func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        var msg = ""
-
-        switch central.state {
-        case .unknown:
-            msg = "unknown"
-        case .resetting:
-            msg = "resetting"
-        case .unsupported:
-            msg = "unsupported"
-        case .unauthorized:
-            msg = "unauthorized"
-        case .poweredOff:
-            msg = "poweredOff"
-        case .poweredOn:
-            msg = "poweredOn"
-        @unknown default:
-            msg = "unknown"
-        }
-        bridge.eventDispatcher().sendAppEvent(withName: "onBluetoothStateChanged", body: ["state": msg])
-    }
-
     @objc func requestAlwaysAuthorization(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
-        let locationManager = CLLocationManager()
-        locationManager.delegate = self
-        locationManager.requestAlwaysAuthorization()
-        let status = CLLocationManager.authorizationStatus()
-        let statusString = statusToString(status)
-        resolve(["status": statusString])
+        DispatchQueue.main.async {
+            let status = CLLocationManager.authorizationStatus()
+            if status == .notDetermined {
+                self.locationManager.requestAlwaysAuthorization()
+            }
+            resolve(["status": self.stringFromAuthorizationStatus(status)])
+        }
     }
     
     @objc func requestWhenInUseAuthorization(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
-        let locationManager = CLLocationManager()
-        locationManager.delegate = self
-        locationManager.requestWhenInUseAuthorization()
-        let status = CLLocationManager.authorizationStatus()
-        let statusString = statusToString(status)
-        resolve(["status": statusString])
+        DispatchQueue.main.async {
+            let status = CLLocationManager.authorizationStatus()
+            if status == .notDetermined {
+                self.locationManager.requestWhenInUseAuthorization()
+            }
+            resolve(["status": self.stringFromAuthorizationStatus(status)])
+        }
     }
-
+    
     @objc func getAuthorizationStatus(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
-        let status = CLLocationManager.authorizationStatus()
-        resolve(statusToString(status))
-    }
-
-    // MARK: - CLLocationManagerDelegate methods
-
-    func locationManager(_ manager: CLLocationManager, didRangeBeacons beacons: [CLBeacon], in region: CLBeaconRegion) {
-        let beaconArray = beacons.map { beacon -> [String: Any] in
-            if #available(iOS 13.0, *) {
-                return [
-                    "uuid": beacon.uuid.uuidString,
-                    "major": beacon.major.stringValue,
-                    "minor": beacon.minor.stringValue,
-                    "distance": beacon.accuracy,
-                    "rssi": beacon.rssi,
-                    "txPower": 0,
-                    "bluetoothName": "",
-                    "bluetoothAddress": "",
-                    "manufacturer": 0,
-                    "timestamp": Date().timeIntervalSince1970 * 1000
-                ]
-            } else {
-                return [:]
-            }
-        }
-
-        let eventData: [String: Any] = [
-            "beacons": beaconArray,
-            "uuid": region.proximityUUID.uuidString,
-            "identifier": region.identifier
-        ]
-
-        if let bridge = bridge {
-            bridge.eventDispatcher().sendAppEvent(withName: "onBeaconsDetected", body: eventData)
-        }
-    }
-  
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if #available(iOS 14.0, *) {
-            if manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse {
-                startMonitoringAndRanging()
-            }
-        } else {
-            if CLLocationManager.authorizationStatus() == .authorizedAlways || CLLocationManager.authorizationStatus() == .authorizedWhenInUse {
-                startMonitoringAndRanging()
-            }
+        DispatchQueue.main.async {
+            let status = CLLocationManager.authorizationStatus()
+            resolve(self.stringFromAuthorizationStatus(status))
         }
     }
     
-    func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
-        if let beaconRegion = self.beaconRegion {
-            locationManager.startRangingBeacons(in: beaconRegion)
-        }
-    }
-
-    func locationManagerDidResumeLocationUpdates(_ manager: CLLocationManager) {
-        if let beaconRegion = self.beaconRegion {
-            locationManager.startRangingBeacons(in: beaconRegion)
-        }
-    }
+    // MARK: - Private Methods
     
-    func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
-        if let beaconRegion = region as? CLBeaconRegion {
-            let regionData: [String: Any] = [
-                "uuid": beaconRegion.proximityUUID.uuidString,
-                "identifier": beaconRegion.identifier,
-                "major": beaconRegion.major?.stringValue ?? "",
-                "minor": beaconRegion.minor?.stringValue ?? ""
-            ]
-            
-            if let bridge = bridge {
-                bridge.eventDispatcher().sendAppEvent(withName: "didEnterRegion", body: regionData)
-            }
-            // Start ranging when entering the region
-            locationManager.startRangingBeacons(in: beaconRegion)
-        }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
-        if let beaconRegion = region as? CLBeaconRegion {
-            let regionData: [String: Any] = [
-                "uuid": beaconRegion.proximityUUID.uuidString,
-                "identifier": beaconRegion.identifier,
-                "major": beaconRegion.major?.stringValue ?? "",
-                "minor": beaconRegion.minor?.stringValue ?? ""
-            ]
-            
-            if let bridge = bridge {
-                bridge.eventDispatcher().sendAppEvent(withName: "didExitRegion", body: regionData)
-            }
-            // Stop ranging when exiting the region
-            locationManager.stopRangingBeacons(in: beaconRegion)
-        }
-    }
-
-    func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
-        print("Monitoring failed for region: \(region?.identifier ?? "Unknown") with error: \(error.localizedDescription)")
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Location manager failed with error: \(error.localizedDescription)")
-    }
-    
-    private func statusToString(_ status: CLAuthorizationStatus) -> String {
-        switch status {
-        case .notDetermined:
-            return "notDetermined"
-        case .restricted:
-            return "restricted"
-        case .denied:
-            return "denied"
-        case .authorizedAlways:
-            return "authorizedAlways"
-        case .authorizedWhenInUse:
-            return "authorizedWhenInUse"
-        @unknown default:
-            return "unknown"
-        }
-    }
-
     private func startMonitoringAndRanging() {
         guard let beaconRegion = self.beaconRegion else { return }
         
+        print("[BeaconRadar] Starting monitoring and ranging for region: \(beaconRegion.identifier)")
+        
+        // First stop any existing monitoring
+        self.locationManager.stopMonitoring(for: beaconRegion)
+        self.locationManager.stopRangingBeacons(in: beaconRegion)
+        
+        // Start new monitoring
         self.locationManager.startMonitoring(for: beaconRegion)
-        // Check if we are already in the region
+        self.locationManager.startRangingBeacons(in: beaconRegion)
+        
+        // Request immediate state check
         self.locationManager.requestState(for: beaconRegion)
+    }
+    
+    private func sendEvent(name: String, body: Any?) {
+        self.bridge.eventDispatcher().sendAppEvent(withName: name, body: body)
+    }
+    
+    private func stringFromAuthorizationStatus(_ status: CLAuthorizationStatus) -> String {
+        switch status {
+        case .notDetermined: return "notDetermined"
+        case .restricted: return "restricted"
+        case .denied: return "denied"
+        case .authorizedAlways: return "authorizedAlways"
+        case .authorizedWhenInUse: return "authorizedWhenInUse"
+        @unknown default: return "unknown"
+        }
+    }
+    
+    // MARK: - CLLocationManagerDelegate
+    
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        print("[BeaconRadar] Authorization status changed: \(self.stringFromAuthorizationStatus(status))")
+        
+        if status == .authorizedAlways || status == .authorizedWhenInUse {
+            self.startMonitoringAndRanging()
+        } else {
+            self.sendEvent(name: "onAuthorizationFailure", body: ["status": self.stringFromAuthorizationStatus(status)])
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+        guard let beaconRegion = region as? CLBeaconRegion else { return }
+        
+        let stateStr: String
+        switch state {
+        case .inside:
+            stateStr = "INSIDE"
+            print("[BeaconRadar] Already inside region: \(region.identifier)")
+            self.locationManager.startRangingBeacons(in: beaconRegion)
+        case .outside:
+            stateStr = "OUTSIDE"
+            print("[BeaconRadar] Currently outside region: \(region.identifier)")
+            self.locationManager.stopRangingBeacons(in: beaconRegion)
+        case .unknown:
+            stateStr = "UNKNOWN"
+            print("[BeaconRadar] Unknown state for region: \(region.identifier)")
+        }
+        
+        let regionData: [String: Any] = [
+            "uuid": beaconRegion.uuid.uuidString,
+            "identifier": beaconRegion.identifier,
+            "major": beaconRegion.major?.intValue ?? NSNull(),
+            "minor": beaconRegion.minor?.intValue ?? NSNull(),
+            "state": stateStr
+        ]
+        
+        self.sendEvent(name: "didDetermineStateForRegion", body: regionData)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        guard let beaconRegion = region as? CLBeaconRegion else { return }
+        
+        print("[BeaconRadar] Did enter region: \(region.identifier)")
+        
+        let regionData: [String: Any] = [
+            "uuid": beaconRegion.uuid.uuidString,
+            "identifier": beaconRegion.identifier,
+            "major": beaconRegion.major?.intValue ?? NSNull(),
+            "minor": beaconRegion.minor?.intValue ?? NSNull()
+        ]
+        
+        self.sendEvent(name: "didEnterRegion", body: regionData)
+        self.locationManager.startRangingBeacons(in: beaconRegion)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+        guard let beaconRegion = region as? CLBeaconRegion else { return }
+        
+        print("[BeaconRadar] Did exit region: \(region.identifier)")
+        
+        let regionData: [String: Any] = [
+            "uuid": beaconRegion.uuid.uuidString,
+            "identifier": beaconRegion.identifier,
+            "major": beaconRegion.major?.intValue ?? NSNull(),
+            "minor": beaconRegion.minor?.intValue ?? NSNull()
+        ]
+        
+        self.sendEvent(name: "didExitRegion", body: regionData)
+        self.locationManager.stopRangingBeacons(in: beaconRegion)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didRangeBeacons beacons: [CLBeacon], in region: CLBeaconRegion) {
+        guard !beacons.isEmpty else { return }
+        
+        let beaconArray = beacons.map { beacon -> [String: Any] in
+            return [
+                "uuid": beacon.uuid.uuidString,
+                "major": beacon.major.intValue,
+                "minor": beacon.minor.intValue,
+                "distance": beacon.accuracy,
+                "rssi": beacon.rssi,
+                "proximity": beacon.proximity.rawValue
+            ]
+        }
+        
+        self.sendEvent(name: "onBeaconsDetected", body: beaconArray)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
+        print("[BeaconRadar] Monitoring failed for region: \(region?.identifier ?? "unknown") - \(error.localizedDescription)")
+        self.sendEvent(name: "onMonitoringFailed", body: ["error": error.localizedDescription])
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("[BeaconRadar] Location manager failed: \(error.localizedDescription)")
+        self.sendEvent(name: "onLocationManagerFailed", body: ["error": error.localizedDescription])
     }
 }
