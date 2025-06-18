@@ -24,18 +24,20 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
         print("[BeaconRadar] Starting scanning for UUID: \(uuid)")
         
         DispatchQueue.main.async {
-            // Initialize location manager
             if self.locationManager == nil {
                 self.locationManager = CLLocationManager()
                 self.locationManager.delegate = self
                 self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
             }
             
-            // Configure background scanning if needed
             if let useBackgroundScanning = config["useBackgroundScanning"] as? Bool, useBackgroundScanning {
-                self.locationManager.allowsBackgroundLocationUpdates = true
-                self.locationManager.pausesLocationUpdatesAutomatically = false
-                print("[BeaconRadar] Background scanning enabled")
+                if CLLocationManager.authorizationStatus() == .authorizedAlways {
+                    self.locationManager.allowsBackgroundLocationUpdates = true
+                    self.locationManager.pausesLocationUpdatesAutomatically = false
+                    print("[BeaconRadar] Background scanning enabled")
+                } else {
+                    print("[BeaconRadar] Cannot enable background scanning - need 'Always' authorization")
+                }
             }
             
             // Create beacon region
@@ -64,7 +66,7 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
                 print("[BeaconRadar] Created region with UUID: \(uuid) (no major/minor)")
             }
             
-            // Configure region notifications
+            // Configure region notifications - FONDAMENTALE
             self.beaconRegion.notifyOnEntry = true
             self.beaconRegion.notifyOnExit = true
             self.beaconRegion.notifyEntryStateOnDisplay = true
@@ -92,7 +94,10 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
         
         self.locationManager.stopMonitoring(for: beaconRegion)
         self.locationManager.stopRangingBeacons(in: beaconRegion)
-        self.locationManager.allowsBackgroundLocationUpdates = false
+        
+        if self.locationManager.allowsBackgroundLocationUpdates {
+            self.locationManager.allowsBackgroundLocationUpdates = false
+        }
     }
     
     @objc func requestAlwaysAuthorization(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
@@ -129,16 +134,29 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
         
         print("[BeaconRadar] Starting monitoring and ranging for region: \(beaconRegion.identifier)")
         
-        // First stop any existing monitoring
+        guard CLLocationManager.locationServicesEnabled() else {
+            print("[BeaconRadar] Location services not enabled")
+            return
+        }
+        
+        guard CLLocationManager.isMonitoringAvailable(for: CLBeaconRegion.self) else {
+            print("[BeaconRadar] Beacon monitoring not available")
+            return
+        }
+        
         self.locationManager.stopMonitoring(for: beaconRegion)
         self.locationManager.stopRangingBeacons(in: beaconRegion)
         
-        // Start new monitoring
-        self.locationManager.startMonitoring(for: beaconRegion)
-        self.locationManager.startRangingBeacons(in: beaconRegion)
-        
-        // Request immediate state check
-        self.locationManager.requestState(for: beaconRegion)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.locationManager.startMonitoring(for: beaconRegion)
+            print("[BeaconRadar] Started monitoring for region")
+            
+            self.locationManager.startRangingBeacons(in: beaconRegion)
+            print("[BeaconRadar] Started ranging for region")
+            
+            self.locationManager.requestState(for: beaconRegion)
+            print("[BeaconRadar] Requested state for region")
+        }
     }
     
     private func sendEvent(name: String, body: Any?) {
@@ -161,7 +179,14 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         print("[BeaconRadar] Authorization status changed: \(self.stringFromAuthorizationStatus(status))")
         
-        if status == .authorizedAlways || status == .authorizedWhenInUse {
+        if status == .authorizedAlways {
+            if self.locationManager.allowsBackgroundLocationUpdates == false {
+                self.locationManager.allowsBackgroundLocationUpdates = true
+                self.locationManager.pausesLocationUpdatesAutomatically = false
+            }
+            self.startMonitoringAndRanging()
+        } else if status == .authorizedWhenInUse {
+            self.locationManager.allowsBackgroundLocationUpdates = false
             self.startMonitoringAndRanging()
         } else {
             self.sendEvent(name: "onAuthorizationFailure", body: ["status": self.stringFromAuthorizationStatus(status)])
@@ -177,6 +202,15 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
             stateStr = "INSIDE"
             print("[BeaconRadar] Already inside region: \(region.identifier)")
             self.locationManager.startRangingBeacons(in: beaconRegion)
+            
+            let regionData: [String: Any] = [
+                "uuid": beaconRegion.uuid.uuidString,
+                "identifier": beaconRegion.identifier,
+                "major": beaconRegion.major?.intValue ?? NSNull(),
+                "minor": beaconRegion.minor?.intValue ?? NSNull()
+            ]
+            self.sendEvent(name: "didEnterRegion", body: regionData)
+            
         case .outside:
             stateStr = "OUTSIDE"
             print("[BeaconRadar] Currently outside region: \(region.identifier)")
