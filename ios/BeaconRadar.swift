@@ -229,26 +229,6 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
         self.locationManager.stopRangingBeacons(in: beaconRegion)
     }
     
-    func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
-        guard let beaconRegion = region as? CLBeaconRegion else { return }
-
-        if state == .inside {
-            print("Already inside region, starting ranging...")
-            locationManager.startRangingBeacons(in: beaconRegion)
-
-            if let bridge = bridge {
-                let regionData: [String: Any] = [
-                    "uuid": beaconRegion.proximityUUID.uuidString,
-                    "identifier": beaconRegion.identifier,
-                    "major": beaconRegion.major?.stringValue ?? "",
-                    "minor": beaconRegion.minor?.stringValue ?? ""
-                ]
-
-                bridge.eventDispatcher().sendAppEvent(withName: "didDetermineStateInside", body: regionData)
-            }
-        }
-    }
-
     func locationManager(_ manager: CLLocationManager, didRangeBeacons beacons: [CLBeacon], in region: CLBeaconRegion) {
         guard !beacons.isEmpty else { return }
         
