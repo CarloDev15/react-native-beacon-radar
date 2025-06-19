@@ -1,6 +1,6 @@
 {
   "name": "react-native-beacon-radar",
-  "version": "0.3.2",
+  "version": "1.0.0",
   "codegenConfig": {
     "name": "BeaconRadar",
     "type": "modules",
