@@ -18,8 +18,7 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
         return true
     }
     
-    // MARK: - Public Methods
-    
+    // Public Methods
     @objc func startScanning(_ uuid: String, config: NSDictionary) {
         print("[BeaconRadar] Starting scanning for UUID: \(uuid)")
         
@@ -66,7 +65,7 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
                 print("[BeaconRadar] Created region with UUID: \(uuid) (no major/minor)")
             }
             
-            // Configure region notifications - FONDAMENTALE
+            // Configure region notifications
             self.beaconRegion.notifyOnEntry = true
             self.beaconRegion.notifyOnExit = true
             self.beaconRegion.notifyEntryStateOnDisplay = true
@@ -127,8 +126,7 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
         }
     }
     
-    // MARK: - Private Methods
-    
+    // Private Methods
     private func startMonitoringAndRanging() {
         guard let beaconRegion = self.beaconRegion else { return }
         
@@ -174,8 +172,7 @@ class BeaconRadar: NSObject, RCTBridgeModule, CLLocationManagerDelegate {
         }
     }
     
-    // MARK: - CLLocationManagerDelegate
-    
+    // CLLocationManagerDelegate
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         print("[BeaconRadar] Authorization status changed: \(self.stringFromAuthorizationStatus(status))")
         
