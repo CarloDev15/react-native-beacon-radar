@@ -549,4 +549,15 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
         val minor = map.getString("minor")?.let { Identifier.parse(it) }
         return Region(identifier, uuid, major, minor)
     }
+
+    @ReactMethod
+    fun addListener(eventName: String) {
+        // Method required by React Native but no specific implementation needed
+    }
+
+    @ReactMethod
+    fun removeListeners(count: Int) {
+        // Method required by React Native but no specific implementation needed
+    }
+
 }
