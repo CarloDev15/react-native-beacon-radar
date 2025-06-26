@@ -8,6 +8,8 @@ export {
   getAuthorizationStatus,
   isBluetoothEnabled,
   getBluetoothState,
+  getLocationState,
+  getBluetoothAndLocationState,
   startForegroundService,
   stopForegroundService,
   initializeBluetoothManager

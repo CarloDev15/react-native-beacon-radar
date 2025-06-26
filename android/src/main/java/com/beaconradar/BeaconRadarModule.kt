@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
@@ -310,7 +311,81 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
         }
     }
 
+    // Bluetooth and GPS state checking functions
+    private fun getBluetoothState(): String {
+        return try {
+            val bluetoothManager = reactApplicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            val bluetoothAdapter = bluetoothManager.adapter
+            
+            when {
+                bluetoothAdapter == null -> "not_supported"
+                bluetoothAdapter.isEnabled -> "on"
+                else -> "off"
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking Bluetooth state: ${e.message}")
+            "error"
+        }
+    }
 
+    private fun getLocationState(): String {
+        return try {
+            val locationManager = reactApplicationContext.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            
+            val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+            
+            when {
+                isGpsEnabled || isNetworkEnabled -> "on"
+                else -> "off"
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking Location state: ${e.message}")
+            "error"
+        }
+    }
+
+    // React Native methods for Bluetooth and GPS state
+    @ReactMethod
+    override fun getBluetoothAndLocationState(promise: Promise) {
+        try {
+            val bluetoothState = getBluetoothState()
+            val locationState = getLocationState()
+            
+            val result = Arguments.createMap().apply {
+                putString("bluetooth", bluetoothState)
+                putString("location", locationState)
+            }
+            
+            Log.d(TAG, "Bluetooth state: $bluetoothState, Location state: $locationState")
+            promise.resolve(result)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting Bluetooth/Location state: ${e.message}")
+            promise.reject("STATE_CHECK_ERROR", "Failed to check states: ${e.message}")
+        }
+    }
+
+    @ReactMethod
+    override fun getBluetoothState(promise: Promise) {
+        try {
+            val bluetoothState = getBluetoothState()
+            promise.resolve(bluetoothState)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting Bluetooth state: ${e.message}")
+            promise.reject("BLUETOOTH_STATE_ERROR", "Failed to check Bluetooth state: ${e.message}")
+        }
+    }
+
+    @ReactMethod
+    override fun getLocationState(promise: Promise) {
+        try {
+            val locationState = getLocationState()
+            promise.resolve(locationState)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting Location state: ${e.message}")
+            promise.reject("LOCATION_STATE_ERROR", "Failed to check Location state: ${e.message}")
+        }
+    }
 
     // Spec method
     override fun startScanning(uuid: String, options: ReadableMap, promise: Promise) {
@@ -338,10 +413,6 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
         reactApplicationContext.runOnUiQueueThread {
             beaconManager.startRangingBeacons(regionObj)
         }
-    }
-
-    private fun getBluetoothState(): String {
-        return "unknown"
     }
 
     @ReactMethod
