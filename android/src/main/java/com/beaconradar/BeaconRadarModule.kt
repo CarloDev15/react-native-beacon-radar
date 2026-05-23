@@ -448,6 +448,16 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
     }
 
     @ReactMethod
+    public void addListener(String eventName) {
+        // Richiesto dalla New Architecture
+    }
+
+    @ReactMethod
+    public void removeListeners(double count) {
+        // Richiesto dalla New Architecture
+    }
+
+    @ReactMethod
     fun getBackgroundMode(promise: Promise) {
         // Return the actual setting from SharedPreferences to ensure consistency
         promise.resolve(loadBackgroundModeSetting())
