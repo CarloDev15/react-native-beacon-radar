@@ -458,13 +458,13 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
     }
 
     @ReactMethod
-    public void addListener(String eventName) {
-        // Richiesto dalla New Architecture
+    fun addListener(eventName: String) {
+        // Required for React Native EventEmitter
     }
 
     @ReactMethod
-    public void removeListeners(double count) {
-        // Richiesto dalla New Architecture
+    fun removeListeners(count: Int) {
+        // Required for React Native EventEmitter
     }
 
     @ReactMethod
