@@ -389,16 +389,26 @@ class BeaconRadarModule(reactContext: ReactApplicationContext) : NativeBeaconRad
 
     // Spec method
     override fun startScanning(uuid: String, options: ReadableMap, promise: Promise) {
-        Log.d(TAG, "startScanning chiamato con uuid=$uuid, options=$options")
+        Log.d(TAG, "startScanning chiamato con uuid=$uuid")
         region = Region("all-beacons", Identifier.parse(uuid), null, null)
-        beaconManager.stopMonitoring(region)
-        beaconManager.stopRangingBeacons(region)
-        beaconManager.addMonitorNotifier(this)
-        beaconManager.addRangeNotifier(this)
-        // setupForegroundService()
-        beaconManager.startMonitoring(region)
-        beaconManager.startRangingBeacons(region)
-        promise.resolve(null)
+
+        reactApplicationContext.runOnUiQueueThread {
+            try {
+                beaconManager.removeAllMonitorNotifiers()
+                beaconManager.removeAllRangeNotifiers()
+                beaconManager.addMonitorNotifier(this)
+                beaconManager.addRangeNotifier(this)
+                beaconManager.stopMonitoring(region)
+                beaconManager.stopRangingBeacons(region)
+                beaconManager.startMonitoring(region)
+                beaconManager.startRangingBeacons(region)
+                Log.d(TAG, "startScanning: monitoring e ranging avviati per UUID=$uuid")
+                promise.resolve(null)
+            } catch (e: Exception) {
+                Log.e(TAG, "startScanning error: ${e.message}")
+                promise.reject("SCAN_ERROR", e.message)
+            }
+        }
     }
 
     override fun stopRanging(region: ReadableMap) {
